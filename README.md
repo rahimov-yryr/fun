@@ -76,7 +76,26 @@ DATABASE_PATH=./database.sqlite
 NODE_ENV=development
 ```
 
-4. **Start the application**
+4. **Seed the database with dummy data (Optional but Recommended)**
+```bash
+npm run seed
+```
+
+This will populate the database with:
+- 5 teachers with different specializations
+- 10 students with complete profiles
+- 10 courses across various subjects
+- 34+ enrollments
+- Multiple grades and assignments
+- Sample communications
+
+**Default login credentials after seeding:**
+- Email: `admin@educrm.com`
+- Password: `password123`
+
+You can also login as teachers using their emails (e.g., `john.doe@educrm.com`) with the same password.
+
+5. **Start the application**
 
 For development (runs both server and client):
 ```bash
@@ -92,7 +111,7 @@ npm run server
 npm run client
 ```
 
-5. **Access the application**
+6. **Access the application**
 - Frontend: http://localhost:5173
 - Backend API: http://localhost:3000
 
