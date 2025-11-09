@@ -1,7 +1,7 @@
 import express from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { db } from '../database/init.js';
+import dbWrapper from '../database/wrapper.js';
 
 const router = express.Router();
 
@@ -16,7 +16,7 @@ router.post('/register', async (req, res) => {
     }
 
     // Check if user exists
-    const existingUser = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
+    const existingUser = dbWrapper.prepare('SELECT * FROM users WHERE email = ?').get(email);
     if (existingUser) {
       return res.status(400).json({ error: 'User already exists' });
     }
@@ -25,7 +25,7 @@ router.post('/register', async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
 
     // Create user
-    const result = db.prepare(
+    const result = dbWrapper.prepare(
       'INSERT INTO users (email, password, role) VALUES (?, ?, ?)'
     ).run(email, hashedPassword, role);
 
@@ -56,7 +56,7 @@ router.post('/login', async (req, res) => {
     }
 
     // Find user
-    const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
+    const user = dbWrapper.prepare('SELECT * FROM users WHERE email = ?').get(email);
     if (!user) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
@@ -99,7 +99,7 @@ router.get('/me', (req, res) => {
         return res.status(403).json({ error: 'Invalid or expired token' });
       }
 
-      const userData = db.prepare('SELECT id, email, role FROM users WHERE id = ?').get(user.id);
+      const userData = dbWrapper.prepare('SELECT id, email, role FROM users WHERE id = ?').get(user.id);
       res.json({ user: userData });
     });
   } catch (error) {

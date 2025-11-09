@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import { initDatabase } from './database/init.js';
+import { initWrapper } from './database/wrapper.js';
 import authRoutes from './routes/auth.js';
 import studentRoutes from './routes/students.js';
 import courseRoutes from './routes/courses.js';
@@ -44,6 +45,7 @@ app.use(errorHandler);
 async function startServer() {
   try {
     await initDatabase();
+    await initWrapper();
 
     app.listen(PORT, () => {
       console.log(`🚀 Server is running on port ${PORT}`);
