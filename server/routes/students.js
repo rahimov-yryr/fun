@@ -1,5 +1,5 @@
 import express from 'express';
-import { db } from '../database/init.js';
+import dbWrapper from '../database/wrapper.js';
 import { authenticateToken, authorizeRoles } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -24,7 +24,7 @@ router.get('/', authenticateToken, (req, res) => {
 
     query += ' ORDER BY created_at DESC';
 
-    const students = db.prepare(query).all(...params);
+    const students = dbWrapper.prepare(query).all(...params);
     res.json({ students, count: students.length });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -34,14 +34,14 @@ router.get('/', authenticateToken, (req, res) => {
 // Get single student
 router.get('/:id', authenticateToken, (req, res) => {
   try {
-    const student = db.prepare('SELECT * FROM students WHERE id = ?').get(req.params.id);
+    const student = dbWrapper.prepare('SELECT * FROM students WHERE id = ?').get(req.params.id);
 
     if (!student) {
       return res.status(404).json({ error: 'Student not found' });
     }
 
     // Get enrollments
-    const enrollments = db.prepare(`
+    const enrollments = dbWrapper.prepare(`
       SELECT e.*, c.name as course_name, c.code as course_code
       FROM enrollments e
       JOIN courses c ON e.course_id = c.id
@@ -67,7 +67,7 @@ router.post('/', authenticateToken, authorizeRoles('admin', 'teacher'), (req, re
       return res.status(400).json({ error: 'First name and last name are required' });
     }
 
-    const result = db.prepare(`
+    const result = dbWrapper.prepare(`
       INSERT INTO students (
         first_name, last_name, date_of_birth, gender, phone, address,
         emergency_contact, parent_name, parent_email, parent_phone,
@@ -79,7 +79,7 @@ router.post('/', authenticateToken, authorizeRoles('admin', 'teacher'), (req, re
       enrollment_date, status, notes
     );
 
-    const student = db.prepare('SELECT * FROM students WHERE id = ?').get(result.lastInsertRowid);
+    const student = dbWrapper.prepare('SELECT * FROM students WHERE id = ?').get(result.lastInsertRowid);
     res.status(201).json({ message: 'Student created successfully', student });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -94,7 +94,7 @@ router.put('/:id', authenticateToken, authorizeRoles('admin', 'teacher'), (req, 
       emergency_contact, parent_name, parent_email, parent_phone, status, notes
     } = req.body;
 
-    const result = db.prepare(`
+    const result = dbWrapper.prepare(`
       UPDATE students SET
         first_name = COALESCE(?, first_name),
         last_name = COALESCE(?, last_name),
@@ -120,7 +120,7 @@ router.put('/:id', authenticateToken, authorizeRoles('admin', 'teacher'), (req, 
       return res.status(404).json({ error: 'Student not found' });
     }
 
-    const student = db.prepare('SELECT * FROM students WHERE id = ?').get(req.params.id);
+    const student = dbWrapper.prepare('SELECT * FROM students WHERE id = ?').get(req.params.id);
     res.json({ message: 'Student updated successfully', student });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -130,7 +130,7 @@ router.put('/:id', authenticateToken, authorizeRoles('admin', 'teacher'), (req, 
 // Delete student
 router.delete('/:id', authenticateToken, authorizeRoles('admin'), (req, res) => {
   try {
-    const result = db.prepare('DELETE FROM students WHERE id = ?').run(req.params.id);
+    const result = dbWrapper.prepare('DELETE FROM students WHERE id = ?').run(req.params.id);
 
     if (result.changes === 0) {
       return res.status(404).json({ error: 'Student not found' });
@@ -146,10 +146,10 @@ router.delete('/:id', authenticateToken, authorizeRoles('admin'), (req, res) => 
 router.get('/:id/stats', authenticateToken, (req, res) => {
   try {
     const stats = {
-      totalCourses: db.prepare('SELECT COUNT(*) as count FROM enrollments WHERE student_id = ?').get(req.params.id).count,
-      activeCourses: db.prepare('SELECT COUNT(*) as count FROM enrollments WHERE student_id = ? AND status = "enrolled"').get(req.params.id).count,
-      completedCourses: db.prepare('SELECT COUNT(*) as count FROM enrollments WHERE student_id = ? AND status = "completed"').get(req.params.id).count,
-      averageGrade: db.prepare(`
+      totalCourses: dbWrapper.prepare('SELECT COUNT(*) as count FROM enrollments WHERE student_id = ?').get(req.params.id).count,
+      activeCourses: dbWrapper.prepare('SELECT COUNT(*) as count FROM enrollments WHERE student_id = ? AND status = "enrolled"').get(req.params.id).count,
+      completedCourses: dbWrapper.prepare('SELECT COUNT(*) as count FROM enrollments WHERE student_id = ? AND status = "completed"').get(req.params.id).count,
+      averageGrade: dbWrapper.prepare(`
         SELECT AVG((score / max_score) * 100) as avg
         FROM grades g
         JOIN enrollments e ON g.enrollment_id = e.id

@@ -1,5 +1,5 @@
 import express from 'express';
-import { db } from '../database/init.js';
+import dbWrapper from '../database/wrapper.js';
 import { authenticateToken, authorizeRoles } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -18,7 +18,7 @@ router.get('/', authenticateToken, (req, res) => {
 
     query += ' ORDER BY created_at DESC';
 
-    const teachers = db.prepare(query).all(...params);
+    const teachers = dbWrapper.prepare(query).all(...params);
     res.json({ teachers, count: teachers.length });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -28,14 +28,14 @@ router.get('/', authenticateToken, (req, res) => {
 // Get single teacher
 router.get('/:id', authenticateToken, (req, res) => {
   try {
-    const teacher = db.prepare('SELECT * FROM teachers WHERE id = ?').get(req.params.id);
+    const teacher = dbWrapper.prepare('SELECT * FROM teachers WHERE id = ?').get(req.params.id);
 
     if (!teacher) {
       return res.status(404).json({ error: 'Teacher not found' });
     }
 
     // Get courses taught by this teacher
-    const courses = db.prepare(`
+    const courses = dbWrapper.prepare(`
       SELECT c.*,
         (SELECT COUNT(*) FROM enrollments WHERE course_id = c.id AND status = 'enrolled') as enrolled_count
       FROM courses c
@@ -60,7 +60,7 @@ router.post('/', authenticateToken, authorizeRoles('admin'), (req, res) => {
       return res.status(400).json({ error: 'First name, last name, and email are required' });
     }
 
-    const result = db.prepare(`
+    const result = dbWrapper.prepare(`
       INSERT INTO teachers (
         first_name, last_name, email, phone, specialization,
         qualification, hire_date, status, bio
@@ -70,7 +70,7 @@ router.post('/', authenticateToken, authorizeRoles('admin'), (req, res) => {
       qualification, hire_date, status, bio
     );
 
-    const teacher = db.prepare('SELECT * FROM teachers WHERE id = ?').get(result.lastInsertRowid);
+    const teacher = dbWrapper.prepare('SELECT * FROM teachers WHERE id = ?').get(result.lastInsertRowid);
     res.status(201).json({ message: 'Teacher created successfully', teacher });
   } catch (error) {
     if (error.message.includes('UNIQUE constraint failed')) {
@@ -88,7 +88,7 @@ router.put('/:id', authenticateToken, authorizeRoles('admin'), (req, res) => {
       qualification, status, bio
     } = req.body;
 
-    const result = db.prepare(`
+    const result = dbWrapper.prepare(`
       UPDATE teachers SET
         first_name = COALESCE(?, first_name),
         last_name = COALESCE(?, last_name),
@@ -110,7 +110,7 @@ router.put('/:id', authenticateToken, authorizeRoles('admin'), (req, res) => {
       return res.status(404).json({ error: 'Teacher not found' });
     }
 
-    const teacher = db.prepare('SELECT * FROM teachers WHERE id = ?').get(req.params.id);
+    const teacher = dbWrapper.prepare('SELECT * FROM teachers WHERE id = ?').get(req.params.id);
     res.json({ message: 'Teacher updated successfully', teacher });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -120,7 +120,7 @@ router.put('/:id', authenticateToken, authorizeRoles('admin'), (req, res) => {
 // Delete teacher
 router.delete('/:id', authenticateToken, authorizeRoles('admin'), (req, res) => {
   try {
-    const result = db.prepare('DELETE FROM teachers WHERE id = ?').run(req.params.id);
+    const result = dbWrapper.prepare('DELETE FROM teachers WHERE id = ?').run(req.params.id);
 
     if (result.changes === 0) {
       return res.status(404).json({ error: 'Teacher not found' });

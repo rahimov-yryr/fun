@@ -1,5 +1,5 @@
 import express from 'express';
-import { db } from '../database/init.js';
+import dbWrapper from '../database/wrapper.js';
 import { authenticateToken, authorizeRoles } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -36,7 +36,7 @@ router.get('/', authenticateToken, (req, res) => {
 
     query += ' ORDER BY e.created_at DESC';
 
-    const enrollments = db.prepare(query).all(...params);
+    const enrollments = dbWrapper.prepare(query).all(...params);
     res.json({ enrollments, count: enrollments.length });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -53,7 +53,7 @@ router.post('/', authenticateToken, authorizeRoles('admin', 'teacher'), (req, re
     }
 
     // Check if course has capacity
-    const course = db.prepare(`
+    const course = dbWrapper.prepare(`
       SELECT capacity,
         (SELECT COUNT(*) FROM enrollments WHERE course_id = ? AND status = 'enrolled') as enrolled
       FROM courses WHERE id = ?
@@ -67,12 +67,12 @@ router.post('/', authenticateToken, authorizeRoles('admin', 'teacher'), (req, re
       return res.status(400).json({ error: 'Course is at full capacity' });
     }
 
-    const result = db.prepare(`
+    const result = dbWrapper.prepare(`
       INSERT INTO enrollments (student_id, course_id, enrollment_date, notes)
       VALUES (?, ?, ?, ?)
     `).run(student_id, course_id, enrollment_date || new Date().toISOString().split('T')[0], notes);
 
-    const enrollment = db.prepare('SELECT * FROM enrollments WHERE id = ?').get(result.lastInsertRowid);
+    const enrollment = dbWrapper.prepare('SELECT * FROM enrollments WHERE id = ?').get(result.lastInsertRowid);
     res.status(201).json({ message: 'Enrollment created successfully', enrollment });
   } catch (error) {
     if (error.message.includes('UNIQUE constraint failed')) {
@@ -87,7 +87,7 @@ router.put('/:id', authenticateToken, authorizeRoles('admin', 'teacher'), (req, 
   try {
     const { status, final_grade, attendance_percentage, notes } = req.body;
 
-    const result = db.prepare(`
+    const result = dbWrapper.prepare(`
       UPDATE enrollments SET
         status = COALESCE(?, status),
         final_grade = COALESCE(?, final_grade),
@@ -101,7 +101,7 @@ router.put('/:id', authenticateToken, authorizeRoles('admin', 'teacher'), (req, 
       return res.status(404).json({ error: 'Enrollment not found' });
     }
 
-    const enrollment = db.prepare('SELECT * FROM enrollments WHERE id = ?').get(req.params.id);
+    const enrollment = dbWrapper.prepare('SELECT * FROM enrollments WHERE id = ?').get(req.params.id);
     res.json({ message: 'Enrollment updated successfully', enrollment });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -111,7 +111,7 @@ router.put('/:id', authenticateToken, authorizeRoles('admin', 'teacher'), (req, 
 // Delete enrollment (drop course)
 router.delete('/:id', authenticateToken, authorizeRoles('admin', 'teacher'), (req, res) => {
   try {
-    const result = db.prepare('DELETE FROM enrollments WHERE id = ?').run(req.params.id);
+    const result = dbWrapper.prepare('DELETE FROM enrollments WHERE id = ?').run(req.params.id);
 
     if (result.changes === 0) {
       return res.status(404).json({ error: 'Enrollment not found' });

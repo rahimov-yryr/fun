@@ -1,5 +1,5 @@
 import express from 'express';
-import { db } from '../database/init.js';
+import dbWrapper from '../database/wrapper.js';
 import { authenticateToken, authorizeRoles } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -30,7 +30,7 @@ router.get('/', authenticateToken, (req, res) => {
 
     query += ' ORDER BY c.created_at DESC';
 
-    const courses = db.prepare(query).all(...params);
+    const courses = dbWrapper.prepare(query).all(...params);
     res.json({ courses, count: courses.length });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -40,7 +40,7 @@ router.get('/', authenticateToken, (req, res) => {
 // Get single course
 router.get('/:id', authenticateToken, (req, res) => {
   try {
-    const course = db.prepare(`
+    const course = dbWrapper.prepare(`
       SELECT c.*,
         t.first_name || ' ' || t.last_name as teacher_name,
         t.email as teacher_email
@@ -54,7 +54,7 @@ router.get('/:id', authenticateToken, (req, res) => {
     }
 
     // Get enrolled students
-    const students = db.prepare(`
+    const students = dbWrapper.prepare(`
       SELECT s.*, e.enrollment_date, e.status as enrollment_status
       FROM students s
       JOIN enrollments e ON s.id = e.student_id
@@ -79,7 +79,7 @@ router.post('/', authenticateToken, authorizeRoles('admin', 'teacher'), (req, re
       return res.status(400).json({ error: 'Course code and name are required' });
     }
 
-    const result = db.prepare(`
+    const result = dbWrapper.prepare(`
       INSERT INTO courses (
         code, name, description, teacher_id, capacity, credits,
         start_date, end_date, schedule, room, status
@@ -89,7 +89,7 @@ router.post('/', authenticateToken, authorizeRoles('admin', 'teacher'), (req, re
       start_date, end_date, schedule, room, status
     );
 
-    const course = db.prepare('SELECT * FROM courses WHERE id = ?').get(result.lastInsertRowid);
+    const course = dbWrapper.prepare('SELECT * FROM courses WHERE id = ?').get(result.lastInsertRowid);
     res.status(201).json({ message: 'Course created successfully', course });
   } catch (error) {
     if (error.message.includes('UNIQUE constraint failed')) {
@@ -107,7 +107,7 @@ router.put('/:id', authenticateToken, authorizeRoles('admin', 'teacher'), (req, 
       start_date, end_date, schedule, room, status
     } = req.body;
 
-    const result = db.prepare(`
+    const result = dbWrapper.prepare(`
       UPDATE courses SET
         code = COALESCE(?, code),
         name = COALESCE(?, name),
@@ -132,7 +132,7 @@ router.put('/:id', authenticateToken, authorizeRoles('admin', 'teacher'), (req, 
       return res.status(404).json({ error: 'Course not found' });
     }
 
-    const course = db.prepare('SELECT * FROM courses WHERE id = ?').get(req.params.id);
+    const course = dbWrapper.prepare('SELECT * FROM courses WHERE id = ?').get(req.params.id);
     res.json({ message: 'Course updated successfully', course });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -142,7 +142,7 @@ router.put('/:id', authenticateToken, authorizeRoles('admin', 'teacher'), (req, 
 // Delete course
 router.delete('/:id', authenticateToken, authorizeRoles('admin'), (req, res) => {
   try {
-    const result = db.prepare('DELETE FROM courses WHERE id = ?').run(req.params.id);
+    const result = dbWrapper.prepare('DELETE FROM courses WHERE id = ?').run(req.params.id);
 
     if (result.changes === 0) {
       return res.status(404).json({ error: 'Course not found' });

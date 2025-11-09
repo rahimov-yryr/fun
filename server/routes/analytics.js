@@ -1,5 +1,5 @@
 import express from 'express';
-import { db } from '../database/init.js';
+import dbWrapper from '../database/wrapper.js';
 import { authenticateToken, authorizeRoles } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -8,14 +8,14 @@ const router = express.Router();
 router.get('/dashboard', authenticateToken, (req, res) => {
   try {
     const stats = {
-      totalStudents: db.prepare('SELECT COUNT(*) as count FROM students WHERE status = "active"').get().count,
-      totalCourses: db.prepare('SELECT COUNT(*) as count FROM courses WHERE status = "active"').get().count,
-      totalTeachers: db.prepare('SELECT COUNT(*) as count FROM teachers WHERE status = "active"').get().count,
-      totalEnrollments: db.prepare('SELECT COUNT(*) as count FROM enrollments WHERE status = "enrolled"').get().count,
+      totalStudents: dbWrapper.prepare('SELECT COUNT(*) as count FROM students WHERE status = "active"').get().count,
+      totalCourses: dbWrapper.prepare('SELECT COUNT(*) as count FROM courses WHERE status = "active"').get().count,
+      totalTeachers: dbWrapper.prepare('SELECT COUNT(*) as count FROM teachers WHERE status = "active"').get().count,
+      totalEnrollments: dbWrapper.prepare('SELECT COUNT(*) as count FROM enrollments WHERE status = "enrolled"').get().count,
     };
 
     // Recent enrollments
-    const recentEnrollments = db.prepare(`
+    const recentEnrollments = dbWrapper.prepare(`
       SELECT e.*, s.first_name || ' ' || s.last_name as student_name, c.name as course_name
       FROM enrollments e
       JOIN students s ON e.student_id = s.id
@@ -25,7 +25,7 @@ router.get('/dashboard', authenticateToken, (req, res) => {
     `).all();
 
     // Course enrollment statistics
-    const courseStats = db.prepare(`
+    const courseStats = dbWrapper.prepare(`
       SELECT
         c.name,
         c.capacity,
@@ -52,7 +52,7 @@ router.get('/dashboard', authenticateToken, (req, res) => {
 // Student performance analytics
 router.get('/student-performance', authenticateToken, authorizeRoles('admin', 'teacher'), (req, res) => {
   try {
-    const performance = db.prepare(`
+    const performance = dbWrapper.prepare(`
       SELECT
         s.id,
         s.first_name || ' ' || s.last_name as student_name,
@@ -77,7 +77,7 @@ router.get('/student-performance', authenticateToken, authorizeRoles('admin', 't
 // Course performance analytics
 router.get('/course-performance', authenticateToken, authorizeRoles('admin', 'teacher'), (req, res) => {
   try {
-    const performance = db.prepare(`
+    const performance = dbWrapper.prepare(`
       SELECT
         c.id,
         c.name,
@@ -103,7 +103,7 @@ router.get('/course-performance', authenticateToken, authorizeRoles('admin', 'te
 // Enrollment trends
 router.get('/enrollment-trends', authenticateToken, authorizeRoles('admin'), (req, res) => {
   try {
-    const trends = db.prepare(`
+    const trends = dbWrapper.prepare(`
       SELECT
         DATE(enrollment_date) as date,
         COUNT(*) as enrollments
@@ -122,7 +122,7 @@ router.get('/enrollment-trends', authenticateToken, authorizeRoles('admin'), (re
 // Teacher workload
 router.get('/teacher-workload', authenticateToken, authorizeRoles('admin'), (req, res) => {
   try {
-    const workload = db.prepare(`
+    const workload = dbWrapper.prepare(`
       SELECT
         t.id,
         t.first_name || ' ' || t.last_name as teacher_name,

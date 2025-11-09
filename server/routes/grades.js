@@ -1,5 +1,5 @@
 import express from 'express';
-import { db } from '../database/init.js';
+import dbWrapper from '../database/wrapper.js';
 import { authenticateToken, authorizeRoles } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -7,7 +7,7 @@ const router = express.Router();
 // Get grades for an enrollment
 router.get('/enrollment/:enrollmentId', authenticateToken, (req, res) => {
   try {
-    const grades = db.prepare(`
+    const grades = dbWrapper.prepare(`
       SELECT * FROM grades
       WHERE enrollment_id = ?
       ORDER BY due_date DESC
@@ -34,7 +34,7 @@ router.get('/enrollment/:enrollmentId', authenticateToken, (req, res) => {
 // Get all grades for a student
 router.get('/student/:studentId', authenticateToken, (req, res) => {
   try {
-    const grades = db.prepare(`
+    const grades = dbWrapper.prepare(`
       SELECT g.*, e.course_id, c.name as course_name, c.code as course_code
       FROM grades g
       JOIN enrollments e ON g.enrollment_id = e.id
@@ -61,7 +61,7 @@ router.post('/', authenticateToken, authorizeRoles('admin', 'teacher'), (req, re
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
-    const result = db.prepare(`
+    const result = dbWrapper.prepare(`
       INSERT INTO grades (
         enrollment_id, assignment_name, assignment_type, score, max_score,
         weight, due_date, submitted_date, feedback
@@ -71,7 +71,7 @@ router.post('/', authenticateToken, authorizeRoles('admin', 'teacher'), (req, re
       weight, due_date, submitted_date, feedback
     );
 
-    const grade = db.prepare('SELECT * FROM grades WHERE id = ?').get(result.lastInsertRowid);
+    const grade = dbWrapper.prepare('SELECT * FROM grades WHERE id = ?').get(result.lastInsertRowid);
     res.status(201).json({ message: 'Grade created successfully', grade });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -86,7 +86,7 @@ router.put('/:id', authenticateToken, authorizeRoles('admin', 'teacher'), (req, 
       weight, due_date, submitted_date, feedback
     } = req.body;
 
-    const result = db.prepare(`
+    const result = dbWrapper.prepare(`
       UPDATE grades SET
         assignment_name = COALESCE(?, assignment_name),
         assignment_type = COALESCE(?, assignment_type),
@@ -108,7 +108,7 @@ router.put('/:id', authenticateToken, authorizeRoles('admin', 'teacher'), (req, 
       return res.status(404).json({ error: 'Grade not found' });
     }
 
-    const grade = db.prepare('SELECT * FROM grades WHERE id = ?').get(req.params.id);
+    const grade = dbWrapper.prepare('SELECT * FROM grades WHERE id = ?').get(req.params.id);
     res.json({ message: 'Grade updated successfully', grade });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -118,7 +118,7 @@ router.put('/:id', authenticateToken, authorizeRoles('admin', 'teacher'), (req, 
 // Delete grade
 router.delete('/:id', authenticateToken, authorizeRoles('admin', 'teacher'), (req, res) => {
   try {
-    const result = db.prepare('DELETE FROM grades WHERE id = ?').run(req.params.id);
+    const result = dbWrapper.prepare('DELETE FROM grades WHERE id = ?').run(req.params.id);
 
     if (result.changes === 0) {
       return res.status(404).json({ error: 'Grade not found' });
