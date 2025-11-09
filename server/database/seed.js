@@ -2,6 +2,7 @@ import Database from 'better-sqlite3';
 import bcrypt from 'bcryptjs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import { initDatabase } from './init.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -11,8 +12,13 @@ const db = new Database(dbPath);
 
 console.log('🌱 Starting database seeding...');
 
-// Clear existing data
+// Initialize database tables
+console.log('📋 Initializing database tables...');
+initDatabase();
+
+// Clear existing data (in correct order due to foreign keys)
 console.log('🗑️  Clearing existing data...');
+db.exec('PRAGMA foreign_keys = OFF');
 db.exec(`
   DELETE FROM communications;
   DELETE FROM payments;
@@ -24,6 +30,7 @@ db.exec(`
   DELETE FROM students;
   DELETE FROM users;
 `);
+db.exec('PRAGMA foreign_keys = ON');
 
 // Seed Users
 console.log('👥 Creating users...');
@@ -39,7 +46,11 @@ const users = [
 ];
 
 const insertUser = db.prepare('INSERT INTO users (email, password, role) VALUES (?, ?, ?)');
-users.forEach(user => insertUser.run(user.email, user.password, user.role));
+const userIds = {};
+users.forEach(user => {
+  const result = insertUser.run(user.email, user.password, user.role);
+  userIds[user.email] = result.lastInsertRowid;
+});
 
 // Seed Teachers
 console.log('👨‍🏫 Creating teachers...');
@@ -102,16 +113,21 @@ const teachers = [
 ];
 
 const insertTeacher = db.prepare(`
-  INSERT INTO teachers (first_name, last_name, email, phone, specialization, qualification, hire_date, status, bio)
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  INSERT INTO teachers (user_id, first_name, last_name, email, phone, specialization, qualification, hire_date, status, bio)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `);
 
-teachers.forEach(teacher => {
-  insertTeacher.run(
+const teacherIds = [];
+teachers.forEach((teacher) => {
+  // Get the user_id for this teacher's email
+  const userId = userIds[teacher.email];
+  const result = insertTeacher.run(
+    userId,
     teacher.first_name, teacher.last_name, teacher.email, teacher.phone,
     teacher.specialization, teacher.qualification, teacher.hire_date,
     teacher.status, teacher.bio
   );
+  teacherIds.push(result.lastInsertRowid);
 });
 
 // Seed Students
@@ -267,12 +283,14 @@ const insertStudent = db.prepare(`
   ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `);
 
+const studentIds = [];
 students.forEach(student => {
-  insertStudent.run(
+  const result = insertStudent.run(
     student.first_name, student.last_name, student.date_of_birth, student.gender,
     student.phone, student.address, student.emergency_contact, student.parent_name,
     student.parent_email, student.parent_phone, student.enrollment_date, student.status
   );
+  studentIds.push(result.lastInsertRowid);
 });
 
 // Seed Courses
@@ -282,7 +300,7 @@ const courses = [
     code: 'MATH-101',
     name: 'Algebra I',
     description: 'Introduction to algebraic concepts, equations, and problem-solving techniques.',
-    teacher_id: 1,
+    teacher_id: teacherIds[0], // John Doe
     capacity: 30,
     credits: 4,
     start_date: '2024-09-01',
@@ -295,7 +313,7 @@ const courses = [
     code: 'MATH-201',
     name: 'Geometry',
     description: 'Study of shapes, angles, proofs, and spatial reasoning.',
-    teacher_id: 1,
+    teacher_id: teacherIds[0], // John Doe
     capacity: 28,
     credits: 4,
     start_date: '2024-09-01',
@@ -308,7 +326,7 @@ const courses = [
     code: 'CS-101',
     name: 'Introduction to Programming',
     description: 'Learn the fundamentals of programming using Python.',
-    teacher_id: 1,
+    teacher_id: teacherIds[0], // John Doe
     capacity: 25,
     credits: 3,
     start_date: '2024-09-01',
@@ -321,7 +339,7 @@ const courses = [
     code: 'ENG-101',
     name: 'English Literature',
     description: 'Explore classic and contemporary literature with critical analysis.',
-    teacher_id: 2,
+    teacher_id: teacherIds[1], // Jane Smith
     capacity: 30,
     credits: 4,
     start_date: '2024-09-01',
@@ -334,7 +352,7 @@ const courses = [
     code: 'ENG-201',
     name: 'Creative Writing',
     description: 'Develop your creative writing skills through various genres and techniques.',
-    teacher_id: 2,
+    teacher_id: teacherIds[1], // Jane Smith
     capacity: 20,
     credits: 3,
     start_date: '2024-09-01',
@@ -347,7 +365,7 @@ const courses = [
     code: 'PHY-101',
     name: 'Physics I',
     description: 'Introduction to mechanics, energy, and motion.',
-    teacher_id: 3,
+    teacher_id: teacherIds[2], // Michael Johnson
     capacity: 28,
     credits: 4,
     start_date: '2024-09-01',
@@ -360,7 +378,7 @@ const courses = [
     code: 'CHEM-101',
     name: 'Chemistry I',
     description: 'Fundamentals of chemistry including atomic structure and chemical reactions.',
-    teacher_id: 3,
+    teacher_id: teacherIds[2], // Michael Johnson
     capacity: 24,
     credits: 4,
     start_date: '2024-09-01',
@@ -373,7 +391,7 @@ const courses = [
     code: 'HIST-101',
     name: 'World History',
     description: 'Survey of major world civilizations and historical events.',
-    teacher_id: 4,
+    teacher_id: teacherIds[3], // Sarah Williams
     capacity: 32,
     credits: 3,
     start_date: '2024-09-01',
@@ -386,7 +404,7 @@ const courses = [
     code: 'ART-101',
     name: 'Visual Arts',
     description: 'Introduction to drawing, painting, and visual composition.',
-    teacher_id: 5,
+    teacher_id: teacherIds[4], // David Brown
     capacity: 20,
     credits: 3,
     start_date: '2024-09-01',
@@ -399,7 +417,7 @@ const courses = [
     code: 'ART-201',
     name: 'Digital Design',
     description: 'Learn digital art and design using modern software tools.',
-    teacher_id: 5,
+    teacher_id: teacherIds[4], // David Brown
     capacity: 18,
     credits: 3,
     start_date: '2024-09-01',
@@ -417,70 +435,72 @@ const insertCourse = db.prepare(`
   ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `);
 
+const courseIds = [];
 courses.forEach(course => {
-  insertCourse.run(
+  const result = insertCourse.run(
     course.code, course.name, course.description, course.teacher_id,
     course.capacity, course.credits, course.start_date, course.end_date,
     course.schedule, course.room, course.status
   );
+  courseIds.push(result.lastInsertRowid);
 });
 
 // Seed Enrollments
 console.log('📝 Creating enrollments...');
 const enrollments = [
-  // Student 1: Emily Anderson
-  { student_id: 1, course_id: 1, enrollment_date: '2023-09-01', status: 'enrolled', attendance_percentage: 95.5 },
-  { student_id: 1, course_id: 4, enrollment_date: '2023-09-01', status: 'enrolled', attendance_percentage: 97.0 },
-  { student_id: 1, course_id: 6, enrollment_date: '2023-09-01', status: 'enrolled', attendance_percentage: 93.5 },
-  { student_id: 1, course_id: 8, enrollment_date: '2023-09-01', status: 'enrolled', attendance_percentage: 96.0 },
+  // Student 0: Emily Anderson
+  { student_id: studentIds[0], course_id: courseIds[0], enrollment_date: '2023-09-01', status: 'enrolled', attendance_percentage: 95.5 },
+  { student_id: studentIds[0], course_id: courseIds[3], enrollment_date: '2023-09-01', status: 'enrolled', attendance_percentage: 97.0 },
+  { student_id: studentIds[0], course_id: courseIds[5], enrollment_date: '2023-09-01', status: 'enrolled', attendance_percentage: 93.5 },
+  { student_id: studentIds[0], course_id: courseIds[7], enrollment_date: '2023-09-01', status: 'enrolled', attendance_percentage: 96.0 },
 
-  // Student 2: James Martinez
-  { student_id: 2, course_id: 1, enrollment_date: '2023-09-01', status: 'enrolled', attendance_percentage: 88.0 },
-  { student_id: 2, course_id: 3, enrollment_date: '2023-09-01', status: 'enrolled', attendance_percentage: 92.0 },
-  { student_id: 2, course_id: 7, enrollment_date: '2023-09-01', status: 'enrolled', attendance_percentage: 85.5 },
-  { student_id: 2, course_id: 9, enrollment_date: '2023-09-01', status: 'enrolled', attendance_percentage: 90.0 },
+  // Student 1: James Martinez
+  { student_id: studentIds[1], course_id: courseIds[0], enrollment_date: '2023-09-01', status: 'enrolled', attendance_percentage: 88.0 },
+  { student_id: studentIds[1], course_id: courseIds[2], enrollment_date: '2023-09-01', status: 'enrolled', attendance_percentage: 92.0 },
+  { student_id: studentIds[1], course_id: courseIds[6], enrollment_date: '2023-09-01', status: 'enrolled', attendance_percentage: 85.5 },
+  { student_id: studentIds[1], course_id: courseIds[8], enrollment_date: '2023-09-01', status: 'enrolled', attendance_percentage: 90.0 },
 
-  // Student 3: Sophia Taylor
-  { student_id: 3, course_id: 2, enrollment_date: '2023-09-01', status: 'enrolled', attendance_percentage: 98.0 },
-  { student_id: 3, course_id: 4, enrollment_date: '2023-09-01', status: 'enrolled', attendance_percentage: 99.0 },
-  { student_id: 3, course_id: 5, enrollment_date: '2023-09-01', status: 'enrolled', attendance_percentage: 97.5 },
-  { student_id: 3, course_id: 10, enrollment_date: '2023-09-01', status: 'enrolled', attendance_percentage: 96.5 },
+  // Student 2: Sophia Taylor
+  { student_id: studentIds[2], course_id: courseIds[1], enrollment_date: '2023-09-01', status: 'enrolled', attendance_percentage: 98.0 },
+  { student_id: studentIds[2], course_id: courseIds[3], enrollment_date: '2023-09-01', status: 'enrolled', attendance_percentage: 99.0 },
+  { student_id: studentIds[2], course_id: courseIds[4], enrollment_date: '2023-09-01', status: 'enrolled', attendance_percentage: 97.5 },
+  { student_id: studentIds[2], course_id: courseIds[9], enrollment_date: '2023-09-01', status: 'enrolled', attendance_percentage: 96.5 },
 
-  // Student 4: Liam Garcia
-  { student_id: 4, course_id: 1, enrollment_date: '2023-09-01', status: 'enrolled', attendance_percentage: 82.0 },
-  { student_id: 4, course_id: 6, enrollment_date: '2023-09-01', status: 'enrolled', attendance_percentage: 80.5 },
-  { student_id: 4, course_id: 8, enrollment_date: '2023-09-01', status: 'enrolled', attendance_percentage: 84.0 },
+  // Student 3: Liam Garcia
+  { student_id: studentIds[3], course_id: courseIds[0], enrollment_date: '2023-09-01', status: 'enrolled', attendance_percentage: 82.0 },
+  { student_id: studentIds[3], course_id: courseIds[5], enrollment_date: '2023-09-01', status: 'enrolled', attendance_percentage: 80.5 },
+  { student_id: studentIds[3], course_id: courseIds[7], enrollment_date: '2023-09-01', status: 'enrolled', attendance_percentage: 84.0 },
 
-  // Student 5: Olivia Rodriguez
-  { student_id: 5, course_id: 3, enrollment_date: '2023-09-01', status: 'enrolled', attendance_percentage: 94.0 },
-  { student_id: 5, course_id: 4, enrollment_date: '2023-09-01', status: 'enrolled', attendance_percentage: 95.5 },
-  { student_id: 5, course_id: 7, enrollment_date: '2023-09-01', status: 'enrolled', attendance_percentage: 92.5 },
-  { student_id: 5, course_id: 10, enrollment_date: '2023-09-01', status: 'enrolled', attendance_percentage: 97.0 },
+  // Student 4: Olivia Rodriguez
+  { student_id: studentIds[4], course_id: courseIds[2], enrollment_date: '2023-09-01', status: 'enrolled', attendance_percentage: 94.0 },
+  { student_id: studentIds[4], course_id: courseIds[3], enrollment_date: '2023-09-01', status: 'enrolled', attendance_percentage: 95.5 },
+  { student_id: studentIds[4], course_id: courseIds[6], enrollment_date: '2023-09-01', status: 'enrolled', attendance_percentage: 92.5 },
+  { student_id: studentIds[4], course_id: courseIds[9], enrollment_date: '2023-09-01', status: 'enrolled', attendance_percentage: 97.0 },
 
-  // Student 6: Noah Wilson
-  { student_id: 6, course_id: 2, enrollment_date: '2023-09-01', status: 'enrolled', attendance_percentage: 91.0 },
-  { student_id: 6, course_id: 6, enrollment_date: '2023-09-01', status: 'enrolled', attendance_percentage: 89.5 },
-  { student_id: 6, course_id: 8, enrollment_date: '2023-09-01', status: 'enrolled', attendance_percentage: 90.0 },
+  // Student 5: Noah Wilson
+  { student_id: studentIds[5], course_id: courseIds[1], enrollment_date: '2023-09-01', status: 'enrolled', attendance_percentage: 91.0 },
+  { student_id: studentIds[5], course_id: courseIds[5], enrollment_date: '2023-09-01', status: 'enrolled', attendance_percentage: 89.5 },
+  { student_id: studentIds[5], course_id: courseIds[7], enrollment_date: '2023-09-01', status: 'enrolled', attendance_percentage: 90.0 },
 
-  // Student 7: Ava Moore
-  { student_id: 7, course_id: 1, enrollment_date: '2023-09-01', status: 'enrolled', attendance_percentage: 96.5 },
-  { student_id: 7, course_id: 5, enrollment_date: '2023-09-01', status: 'enrolled', attendance_percentage: 98.0 },
-  { student_id: 7, course_id: 9, enrollment_date: '2023-09-01', status: 'enrolled', attendance_percentage: 97.5 },
+  // Student 6: Ava Moore
+  { student_id: studentIds[6], course_id: courseIds[0], enrollment_date: '2023-09-01', status: 'enrolled', attendance_percentage: 96.5 },
+  { student_id: studentIds[6], course_id: courseIds[4], enrollment_date: '2023-09-01', status: 'enrolled', attendance_percentage: 98.0 },
+  { student_id: studentIds[6], course_id: courseIds[8], enrollment_date: '2023-09-01', status: 'enrolled', attendance_percentage: 97.5 },
 
-  // Student 8: Ethan Davis
-  { student_id: 8, course_id: 3, enrollment_date: '2023-09-01', status: 'enrolled', attendance_percentage: 87.5 },
-  { student_id: 8, course_id: 6, enrollment_date: '2023-09-01', status: 'enrolled', attendance_percentage: 86.0 },
-  { student_id: 8, course_id: 8, enrollment_date: '2023-09-01', status: 'enrolled', attendance_percentage: 88.5 },
+  // Student 7: Ethan Davis
+  { student_id: studentIds[7], course_id: courseIds[2], enrollment_date: '2023-09-01', status: 'enrolled', attendance_percentage: 87.5 },
+  { student_id: studentIds[7], course_id: courseIds[5], enrollment_date: '2023-09-01', status: 'enrolled', attendance_percentage: 86.0 },
+  { student_id: studentIds[7], course_id: courseIds[7], enrollment_date: '2023-09-01', status: 'enrolled', attendance_percentage: 88.5 },
 
-  // Student 9: Isabella Miller
-  { student_id: 9, course_id: 4, enrollment_date: '2023-09-01', status: 'enrolled', attendance_percentage: 93.0 },
-  { student_id: 9, course_id: 7, enrollment_date: '2023-09-01', status: 'enrolled', attendance_percentage: 91.5 },
-  { student_id: 9, course_id: 9, enrollment_date: '2023-09-01', status: 'enrolled', attendance_percentage: 94.5 },
+  // Student 8: Isabella Miller
+  { student_id: studentIds[8], course_id: courseIds[3], enrollment_date: '2023-09-01', status: 'enrolled', attendance_percentage: 93.0 },
+  { student_id: studentIds[8], course_id: courseIds[6], enrollment_date: '2023-09-01', status: 'enrolled', attendance_percentage: 91.5 },
+  { student_id: studentIds[8], course_id: courseIds[8], enrollment_date: '2023-09-01', status: 'enrolled', attendance_percentage: 94.5 },
 
-  // Student 10: Mason Thompson
-  { student_id: 10, course_id: 2, enrollment_date: '2023-09-01', status: 'enrolled', attendance_percentage: 85.0 },
-  { student_id: 10, course_id: 3, enrollment_date: '2023-09-01', status: 'enrolled', attendance_percentage: 83.5 },
-  { student_id: 10, course_id: 10, enrollment_date: '2023-09-01', status: 'enrolled', attendance_percentage: 87.0 }
+  // Student 9: Mason Thompson
+  { student_id: studentIds[9], course_id: courseIds[1], enrollment_date: '2023-09-01', status: 'enrolled', attendance_percentage: 85.0 },
+  { student_id: studentIds[9], course_id: courseIds[2], enrollment_date: '2023-09-01', status: 'enrolled', attendance_percentage: 83.5 },
+  { student_id: studentIds[9], course_id: courseIds[9], enrollment_date: '2023-09-01', status: 'enrolled', attendance_percentage: 87.0 }
 ];
 
 const insertEnrollment = db.prepare(`
@@ -488,11 +508,13 @@ const insertEnrollment = db.prepare(`
   VALUES (?, ?, ?, ?, ?)
 `);
 
+const enrollmentIds = [];
 enrollments.forEach(enrollment => {
-  insertEnrollment.run(
+  const result = insertEnrollment.run(
     enrollment.student_id, enrollment.course_id, enrollment.enrollment_date,
     enrollment.status, enrollment.attendance_percentage
   );
+  enrollmentIds.push(result.lastInsertRowid);
 });
 
 // Seed Grades
@@ -507,7 +529,7 @@ const assignmentNames = {
 };
 
 // Create grades for each enrollment
-for (let enrollmentId = 1; enrollmentId <= 34; enrollmentId++) {
+enrollmentIds.forEach((enrollmentId) => {
   // Homework assignments
   for (let i = 0; i < 4; i++) {
     const score = 70 + Math.random() * 30; // 70-100
@@ -565,7 +587,7 @@ for (let enrollmentId = 1; enrollmentId <= 34; enrollmentId++) {
   const projectScore = 75 + Math.random() * 25; // 75-100
   db.prepare(`
     INSERT INTO grades (enrollment_id, assignment_name, assignment_type, score, max_score, weight, due_date, submitted_date, feedback)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     enrollmentId,
     'Term Project',
@@ -577,13 +599,13 @@ for (let enrollmentId = 1; enrollmentId <= 34; enrollmentId++) {
     '2024-11-30',
     'Excellent work with creative approach!'
   );
-}
+});
 
 // Seed Communications
 console.log('💬 Creating communications...');
 const communications = [
   {
-    sender_id: 1,
+    sender_id: userIds['admin@educrm.com'],
     recipient_type: 'all',
     subject: 'Welcome to the New Academic Year!',
     message: 'Dear students and parents, welcome to the 2024-2025 academic year! We are excited to embark on this learning journey together.',
@@ -591,7 +613,7 @@ const communications = [
     status: 'sent'
   },
   {
-    sender_id: 1,
+    sender_id: userIds['admin@educrm.com'],
     recipient_type: 'all',
     subject: 'Parent-Teacher Conference Scheduled',
     message: 'Parent-teacher conferences will be held on November 15-16. Please check your email for your scheduled time slot.',
@@ -599,7 +621,7 @@ const communications = [
     status: 'sent'
   },
   {
-    sender_id: 2,
+    sender_id: userIds['john.doe@educrm.com'],
     recipient_type: 'student',
     subject: 'Math Competition Opportunity',
     message: 'Students interested in participating in the regional math competition should sign up by October 30th.',
@@ -607,7 +629,7 @@ const communications = [
     status: 'sent'
   },
   {
-    sender_id: 3,
+    sender_id: userIds['michael.johnson@educrm.com'],
     recipient_type: 'student',
     subject: 'Science Fair Announcement',
     message: 'The annual science fair will be held on December 10th. Start thinking about your project ideas!',
@@ -615,7 +637,7 @@ const communications = [
     status: 'sent'
   },
   {
-    sender_id: 4,
+    sender_id: userIds['sarah.williams@educrm.com'],
     recipient_type: 'parent',
     subject: 'Field Trip Permission Forms',
     message: 'Please sign and return the field trip permission forms for the upcoming museum visit.',
