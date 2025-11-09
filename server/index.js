@@ -22,9 +22,6 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Initialize database
-initDatabase();
-
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/students', studentRoutes);
@@ -43,7 +40,19 @@ app.get('/api/health', (req, res) => {
 // Error handling
 app.use(errorHandler);
 
-app.listen(PORT, () => {
-  console.log(`🚀 Server is running on port ${PORT}`);
-  console.log(`📚 Educational CRM API ready`);
-});
+// Initialize database and start server
+async function startServer() {
+  try {
+    await initDatabase();
+
+    app.listen(PORT, () => {
+      console.log(`🚀 Server is running on port ${PORT}`);
+      console.log(`📚 Educational CRM API ready`);
+    });
+  } catch (error) {
+    console.error('Failed to start server:', error);
+    process.exit(1);
+  }
+}
+
+startServer();

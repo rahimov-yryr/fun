@@ -1,21 +1,70 @@
-import Database from 'better-sqlite3';
+import initSqlJs from 'sql.js';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import fs from 'fs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const dbPath = process.env.DATABASE_PATH || join(__dirname, '../../database.sqlite');
-const db = new Database(dbPath);
 
-export function initDatabase() {
+let db = null;
+
+// Initialize SQL.js and create/load database
+async function initializeDb() {
+  const SQL = await initSqlJs();
+
+  // Try to load existing database or create new one
+  try {
+    if (fs.existsSync(dbPath)) {
+      const buffer = fs.readFileSync(dbPath);
+      db = new SQL.Database(buffer);
+    } else {
+      db = new SQL.Database();
+    }
+  } catch (err) {
+    console.error('Error loading database:', err);
+    db = new SQL.Database();
+  }
+
+  return db;
+}
+
+// Save database to file
+export function saveDatabase() {
+  if (db) {
+    const data = db.export();
+    const buffer = Buffer.from(data);
+    fs.writeFileSync(dbPath, buffer);
+  }
+}
+
+// Auto-save every 5 seconds
+setInterval(() => {
+  if (db) {
+    saveDatabase();
+  }
+}, 5000);
+
+// Save on process exit
+process.on('exit', () => saveDatabase());
+process.on('SIGINT', () => {
+  saveDatabase();
+  process.exit(0);
+});
+
+export async function initDatabase() {
   console.log('🗄️  Initializing database...');
 
-  // Enable foreign keys
-  db.pragma('foreign_keys = ON');
+  if (!db) {
+    await initializeDb();
+  }
 
-  // Users table (for authentication)
-  db.exec(`
+  // Enable foreign keys
+  db.run('PRAGMA foreign_keys = ON');
+
+  // Users table
+  db.run(`
     CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       email TEXT UNIQUE NOT NULL,
@@ -27,7 +76,7 @@ export function initDatabase() {
   `);
 
   // Students table
-  db.exec(`
+  db.run(`
     CREATE TABLE IF NOT EXISTS students (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id INTEGER,
@@ -52,7 +101,7 @@ export function initDatabase() {
   `);
 
   // Teachers table
-  db.exec(`
+  db.run(`
     CREATE TABLE IF NOT EXISTS teachers (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id INTEGER,
@@ -73,7 +122,7 @@ export function initDatabase() {
   `);
 
   // Courses table
-  db.exec(`
+  db.run(`
     CREATE TABLE IF NOT EXISTS courses (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       code TEXT UNIQUE NOT NULL,
@@ -94,7 +143,7 @@ export function initDatabase() {
   `);
 
   // Enrollments table
-  db.exec(`
+  db.run(`
     CREATE TABLE IF NOT EXISTS enrollments (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       student_id INTEGER NOT NULL,
@@ -113,7 +162,7 @@ export function initDatabase() {
   `);
 
   // Grades table
-  db.exec(`
+  db.run(`
     CREATE TABLE IF NOT EXISTS grades (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       enrollment_id INTEGER NOT NULL,
@@ -132,7 +181,7 @@ export function initDatabase() {
   `);
 
   // Attendance table
-  db.exec(`
+  db.run(`
     CREATE TABLE IF NOT EXISTS attendance (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       student_id INTEGER NOT NULL,
@@ -148,7 +197,7 @@ export function initDatabase() {
   `);
 
   // Communications table
-  db.exec(`
+  db.run(`
     CREATE TABLE IF NOT EXISTS communications (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       sender_id INTEGER NOT NULL,
@@ -165,7 +214,7 @@ export function initDatabase() {
   `);
 
   // Payment/Fees table
-  db.exec(`
+  db.run(`
     CREATE TABLE IF NOT EXISTS payments (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       student_id INTEGER NOT NULL,
@@ -183,19 +232,25 @@ export function initDatabase() {
     )
   `);
 
-  // Create indexes for better performance
-  db.exec(`
-    CREATE INDEX IF NOT EXISTS idx_students_user_id ON students(user_id);
-    CREATE INDEX IF NOT EXISTS idx_teachers_user_id ON teachers(user_id);
-    CREATE INDEX IF NOT EXISTS idx_courses_teacher_id ON courses(teacher_id);
-    CREATE INDEX IF NOT EXISTS idx_enrollments_student_id ON enrollments(student_id);
-    CREATE INDEX IF NOT EXISTS idx_enrollments_course_id ON enrollments(course_id);
-    CREATE INDEX IF NOT EXISTS idx_grades_enrollment_id ON grades(enrollment_id);
-    CREATE INDEX IF NOT EXISTS idx_attendance_student_id ON attendance(student_id);
-    CREATE INDEX IF NOT EXISTS idx_attendance_date ON attendance(date);
-  `);
+  // Create indexes
+  db.run(`CREATE INDEX IF NOT EXISTS idx_students_user_id ON students(user_id)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_teachers_user_id ON teachers(user_id)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_courses_teacher_id ON courses(teacher_id)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_enrollments_student_id ON enrollments(student_id)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_enrollments_course_id ON enrollments(course_id)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_grades_enrollment_id ON grades(enrollment_id)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_attendance_student_id ON attendance(student_id)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_attendance_date ON attendance(date)`);
 
+  saveDatabase();
   console.log('✅ Database initialized successfully');
+}
+
+export async function getDatabase() {
+  if (!db) {
+    await initializeDb();
+  }
+  return db;
 }
 
 export { db };

@@ -40,7 +40,7 @@ A modern, full-stack Customer Relationship Management (CRM) system designed spec
 
 ### Backend
 - Node.js & Express
-- SQLite database with better-sqlite3
+- SQLite database with sql.js (pure JavaScript, works on all platforms)
 - JWT authentication
 - bcryptjs for password hashing
 - RESTful API architecture
@@ -49,6 +49,7 @@ A modern, full-stack Customer Relationship Management (CRM) system designed spec
 
 ### Prerequisites
 - Node.js 16+ and npm
+- **No build tools required!** This project uses pure JavaScript SQLite (sql.js) that works on Windows, Mac, and Linux without any compilation.
 
 ### Setup
 
